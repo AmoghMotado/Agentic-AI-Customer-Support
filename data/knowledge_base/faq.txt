@@ -1,0 +1,25 @@
+NovaCart Frequently Asked Questions
+
+How do I contact NovaCart support?
+You can chat with the NovaCart support assistant at any time. Human support agents are available from 9 AM to 9 PM IST, every day. Support tickets are usually answered within 24 hours.
+
+How do I track my order?
+Ask the support assistant for the status of your order and provide your order ID, for example ORD1001. You can also see tracking details on the "My Orders" page.
+
+Where can I find my order ID?
+Your order ID starts with "ORD" followed by four digits. It is shown in the order confirmation email and on the "My Orders" page.
+
+Can I change my delivery address after placing an order?
+The delivery address can be changed only while the order is in "Processing" status. Contact support with your order ID to request the change.
+
+Do you offer gift wrapping?
+Yes. Gift wrapping is available for 49 INR per item on selected products.
+
+Do I need an account to place an order?
+Yes. A NovaCart account is required so you can track orders, manage returns and receive refunds.
+
+Is my personal information safe?
+Yes. NovaCart uses encryption to protect personal data and does not sell customer information to third parties.
+
+How do I get an invoice?
+Invoices can be downloaded from the "My Orders" page after an order is shipped.

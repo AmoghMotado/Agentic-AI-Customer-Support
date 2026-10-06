@@ -1,0 +1,26 @@
+NovaCart Shipping and Delivery Policy
+
+Shipping charges
+Standard shipping is free on orders of 499 INR or more. Orders below 499 INR have a shipping charge of 49 INR. Express shipping costs 99 INR per order and is available in selected cities.
+
+Delivery times
+- Standard delivery: 3 to 7 business days
+- Express delivery: 1 to 2 business days, in selected metro cities
+- Remote areas: up to 10 business days
+Delivery times start from the day the order is shipped, not the day it is placed. Orders are usually shipped within 1 to 2 business days of being placed.
+
+Order tracking
+After an order ships, a tracking update is sent by email and SMS. Customers can also ask the support assistant for the status of an order using the order ID.
+
+Order statuses
+- Processing: the order is being prepared and has not shipped yet.
+- Shipped: the order has left the warehouse and is in transit.
+- Out for Delivery: the courier will deliver the order today.
+- Delivered: the order has been delivered.
+- Cancelled: the order was cancelled and will not be delivered.
+
+Delayed deliveries
+If an order has not arrived within 3 business days after its estimated delivery date, customers should contact support. The support assistant can create a support ticket so the logistics team can investigate with the courier.
+
+Shipping locations
+NovaCart currently ships only within India. International shipping is not available.

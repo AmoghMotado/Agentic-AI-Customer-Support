@@ -1,0 +1,29 @@
+[
+  {
+    "customer_id": "CUST001",
+    "name": "Aarav Sharma",
+    "email": "aarav.sharma@example.com",
+    "phone": "+91-98765-00001",
+    "city": "Pune",
+    "membership": "NovaCart Plus",
+    "member_since": "2024-03-12"
+  },
+  {
+    "customer_id": "CUST002",
+    "name": "Priya Nair",
+    "email": "priya.nair@example.com",
+    "phone": "+91-98765-00002",
+    "city": "Bengaluru",
+    "membership": "Standard",
+    "member_since": "2025-01-08"
+  },
+  {
+    "customer_id": "CUST003",
+    "name": "Rohan Mehta",
+    "email": "rohan.mehta@example.com",
+    "phone": "+91-98765-00003",
+    "city": "Mumbai",
+    "membership": "Standard",
+    "member_since": "2025-07-21"
+  }
+]

@@ -1,0 +1,16 @@
+NovaCart Cancellation Policy
+
+When can an order be cancelled?
+An order can be cancelled free of charge while its status is "Processing", which means it has not yet been handed to the courier.
+
+Orders that cannot be cancelled
+Once an order's status is "Shipped", "Out for Delivery" or "Delivered", it can no longer be cancelled. In that case the customer can refuse the delivery or request a return after delivery, following the Return Policy.
+
+How to cancel
+Customers can cancel an order from the "My Orders" page or by asking the support assistant, using the order ID (for example ORD1003). The order must belong to the customer's own account.
+
+Refund after cancellation
+For prepaid orders, the full amount is refunded to the original payment method after cancellation. Refund timelines follow the Refund Policy. Cash on Delivery orders that are cancelled require no refund.
+
+Cancellation by NovaCart
+NovaCart may cancel an order if the item is out of stock, the payment could not be verified, or the delivery address is not serviceable. The customer is notified by email and receives a full refund.

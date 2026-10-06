@@ -1,0 +1,22 @@
+NovaCart Payment Methods Policy
+
+Accepted payment methods
+NovaCart accepts the following payment methods:
+- UPI (Google Pay, PhonePe, Paytm and other UPI apps)
+- Credit cards (Visa, Mastercard, RuPay, American Express)
+- Debit cards (Visa, Mastercard, RuPay)
+- Net banking from all major Indian banks
+- NovaCart Wallet
+- Cash on Delivery (COD)
+
+Cash on Delivery
+Cash on Delivery is available for orders up to 10,000 INR. A COD handling fee of 20 INR applies. COD is not available for gift cards.
+
+EMI
+No-cost EMI is available on selected credit cards for orders above 3,000 INR. EMI terms are shown on the checkout page.
+
+Payment security
+All online payments are processed through secure, PCI-DSS compliant payment gateways. NovaCart never stores full card numbers and never asks for your card PIN, CVV or OTP over phone, email or chat.
+
+Failed payments
+If money is deducted but the order is not confirmed, the amount is automatically refunded within 5 to 7 business days. If it is not refunded in that time, contact support with the transaction reference.
