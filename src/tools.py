@@ -1,45 +1,31 @@
 """Simulated customer-support tools.
 
-These functions read and write local JSON files instead of a real e-commerce
-backend. Every tool:
-  1. validates its inputs in code (the LLM is never trusted blindly),
-  2. returns a dict with "ok": True/False instead of raising, so a bad input
+These functions read and write the SQLite database (src/db.py) instead of a
+real e-commerce backend. Every tool:
+  1. takes a business_id and only ever touches that business's rows,
+  2. validates its inputs in code (the LLM is never trusted blindly),
+  3. returns a dict with "ok": True/False instead of raising, so a bad input
      becomes a helpful message rather than a crash.
 
 The LLM sees the tool *schemas* defined at the bottom of this file
 (LLM_TOOLS). The graph then calls execute_tool(), which runs the real
-function with validated arguments.
+function with validated arguments and the business ID from the app session.
 """
 
-import json
 import logging
-import re
-import shutil
 from datetime import datetime
 
 from langchain_core.tools import tool
 
-from src import config
+from src import db
+from src.db import CUSTOMER_ID_PATTERN, ORDER_ID_PATTERN
 
 logger = logging.getLogger(__name__)
 
-ORDER_ID_PATTERN = re.compile(r"^ORD\d{4}$")
-CUSTOMER_ID_PATTERN = re.compile(r"^CUST\d{3}$")
-
 
 # ---------------------------------------------------------------------------
-# Small JSON helpers
+# Small helpers
 # ---------------------------------------------------------------------------
-def _read_json(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _write_json(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
 def normalize_order_id(order_id) -> str:
     return str(order_id or "").strip().upper()
 
@@ -50,20 +36,6 @@ def normalize_customer_id(customer_id) -> str:
 
 def _error(message: str) -> dict:
     return {"ok": False, "error": message}
-
-
-def _find_order(order_id: str):
-    for order in _read_json(config.ORDERS_FILE):
-        if order["order_id"] == order_id:
-            return order
-    return None
-
-
-def _find_customer(customer_id: str):
-    for customer in _read_json(config.CUSTOMERS_FILE):
-        if customer["customer_id"] == customer_id:
-            return customer
-    return None
 
 
 def _check_order_id(order_id: str):
@@ -77,7 +49,7 @@ def _check_order_id(order_id: str):
     return None
 
 
-def _check_customer_id(customer_id: str):
+def _check_customer_id(business_id: str, customer_id: str):
     """Return an error dict if the customer ID is missing/invalid/unknown, else None."""
     if not customer_id:
         return _error(
@@ -88,7 +60,7 @@ def _check_customer_id(customer_id: str):
         return _error(
             f"'{customer_id}' is not a valid customer ID. Customer IDs look like CUST001."
         )
-    if _find_customer(customer_id) is None:
+    if db.get_customer(business_id, customer_id) is None:
         return _error(f"No customer found with ID {customer_id}.")
     return None
 
@@ -96,7 +68,7 @@ def _check_customer_id(customer_id: str):
 # ---------------------------------------------------------------------------
 # The actual tools
 # ---------------------------------------------------------------------------
-def get_order_status(order_id: str, customer_id: str = "") -> dict:
+def get_order_status(business_id: str, order_id: str, customer_id: str = "") -> dict:
     """Look up an order. If a customer ID is known, the order must belong to it."""
     order_id = normalize_order_id(order_id)
     customer_id = normalize_customer_id(customer_id)
@@ -105,7 +77,7 @@ def get_order_status(order_id: str, customer_id: str = "") -> dict:
     if problem:
         return problem
 
-    order = _find_order(order_id)
+    order = db.get_order(business_id, order_id)
     if order is None:
         return _error(f"No order found with ID {order_id}. Please double-check the order ID.")
 
@@ -124,29 +96,29 @@ def get_order_status(order_id: str, customer_id: str = "") -> dict:
     }
 
 
-def get_customer_details(customer_id: str) -> dict:
+def get_customer_details(business_id: str, customer_id: str) -> dict:
     """Return a customer's profile and a short list of their orders."""
     customer_id = normalize_customer_id(customer_id)
-    problem = _check_customer_id(customer_id)
+    problem = _check_customer_id(business_id, customer_id)
     if problem:
         return problem
 
-    customer = _find_customer(customer_id)
+    customer = db.get_customer(business_id, customer_id)
+    customer.pop("business_id", None)
     orders = [
         {"order_id": o["order_id"], "product": o["product"], "status": o["status"]}
-        for o in _read_json(config.ORDERS_FILE)
-        if o["customer_id"] == customer_id
+        for o in db.list_orders(business_id, customer_id)
     ]
     return {"ok": True, **customer, "orders": orders}
 
 
-def create_support_ticket(customer_id: str, issue: str, order_id: str = "") -> dict:
-    """Create a support ticket and save it to data/tickets.json."""
+def create_support_ticket(business_id: str, customer_id: str, issue: str, order_id: str = "") -> dict:
+    """Create a support ticket and save it in the database."""
     customer_id = normalize_customer_id(customer_id)
     order_id = normalize_order_id(order_id)
     issue = str(issue or "").strip()
 
-    problem = _check_customer_id(customer_id)
+    problem = _check_customer_id(business_id, customer_id)
     if problem:
         return problem
     if len(issue) < 5:
@@ -156,44 +128,31 @@ def create_support_ticket(customer_id: str, issue: str, order_id: str = "") -> d
         problem = _check_order_id(order_id)
         if problem:
             return problem
-        order = _find_order(order_id)
+        order = db.get_order(business_id, order_id)
         if order is None:
             return _error(f"No order found with ID {order_id}.")
         if order["customer_id"] != customer_id:
             return _error(f"Order {order_id} is not linked to customer {customer_id}.")
 
-    tickets = _read_json(config.TICKETS_FILE) if config.TICKETS_FILE.exists() else []
-    ticket_id = f"TCK{1001 + len(tickets)}"
-    ticket = {
-        "ticket_id": ticket_id,
-        "customer_id": customer_id,
-        "order_id": order_id or None,
-        "issue": issue,
-        "status": "Open",
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-    }
-    tickets.append(ticket)
-    _write_json(config.TICKETS_FILE, tickets)
-
+    ticket_id = db.create_ticket(business_id, customer_id, issue, order_id or None)
     return {
         "ok": True,
         "ticket_id": ticket_id,
         "status": "Open",
-        "message": "Support ticket created. Our team usually responds within 24 hours.",
+        "message": "Support ticket created. A human agent will follow up soon.",
     }
 
 
-def cancel_order(order_id: str, customer_id: str) -> dict:
+def cancel_order(business_id: str, order_id: str, customer_id: str) -> dict:
     """Cancel an order, only if it belongs to the customer and is still Processing."""
     order_id = normalize_order_id(order_id)
     customer_id = normalize_customer_id(customer_id)
 
-    problem = _check_order_id(order_id) or _check_customer_id(customer_id)
+    problem = _check_order_id(order_id) or _check_customer_id(business_id, customer_id)
     if problem:
         return problem
 
-    orders = _read_json(config.ORDERS_FILE)
-    order = next((o for o in orders if o["order_id"] == order_id), None)
+    order = db.get_order(business_id, order_id)
     if order is None:
         return _error(f"No order found with ID {order_id}.")
     if order["customer_id"] != customer_id:
@@ -204,22 +163,19 @@ def cancel_order(order_id: str, customer_id: str) -> dict:
             f"'{order['status']}'. Only orders in 'Processing' status can be cancelled."
         )
 
-    order["status"] = "Cancelled"
-    order["estimated_delivery"] = "-"
-    order["tracking_status"] = f"Cancelled by customer on {datetime.now():%Y-%m-%d}"
-    _write_json(config.ORDERS_FILE, orders)
+    db.update_order(
+        business_id,
+        order_id,
+        status="Cancelled",
+        estimated_delivery="-",
+        tracking_status=f"Cancelled by customer on {datetime.now():%Y-%m-%d}",
+    )
     return {
         "ok": True,
         "order_id": order_id,
         "status": "Cancelled",
-        "message": "Order cancelled. Prepaid amounts are refunded to the original payment method.",
+        "message": "Order cancelled. Prepaid amounts are refunded according to the refund policy.",
     }
-
-
-def reset_demo_data():
-    """Restore orders.json from data/seed and clear all tickets."""
-    shutil.copyfile(config.SEED_ORDERS_FILE, config.ORDERS_FILE)
-    _write_json(config.TICKETS_FILE, [])
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +183,7 @@ def reset_demo_data():
 # ---------------------------------------------------------------------------
 # These wrappers only define the name, description and arguments the LLM sees.
 # The LLM never runs them directly: the graph calls execute_tool() instead.
+# business_id is NOT in any schema: the LLM cannot see or choose the business.
 # customer_id is optional for the LLM because the app usually knows it from the
 # sidebar, and the app's value always wins (the LLM cannot act for someone else).
 
@@ -235,14 +192,14 @@ def get_order_status_tool(order_id: str) -> dict:
     """Get the current status, tracking information and estimated delivery date
     of an order. Only call this when the customer has given an order ID like ORD1001.
     Never guess or invent an order ID."""
-    return get_order_status(order_id)
+    raise NotImplementedError("Run through execute_tool()")
 
 
 @tool("get_customer_details")
 def get_customer_details_tool(customer_id: str = "") -> dict:
     """Get the customer's profile (name, email, membership) and a list of their orders.
     Leave customer_id empty to use the logged-in customer."""
-    return get_customer_details(customer_id)
+    raise NotImplementedError("Run through execute_tool()")
 
 
 @tool("create_support_ticket")
@@ -251,14 +208,14 @@ def create_support_ticket_tool(issue: str, order_id: str = "", customer_id: str 
     damaged item, a late delivery or a failed refund. issue is a short summary of
     the problem in the customer's words. order_id is optional. Leave customer_id
     empty to use the logged-in customer."""
-    return create_support_ticket(customer_id, issue, order_id)
+    raise NotImplementedError("Run through execute_tool()")
 
 
 @tool("cancel_order")
 def cancel_order_tool(order_id: str, customer_id: str = "") -> dict:
     """Cancel an order. Only call this when the customer clearly asks to cancel a
     specific order ID. Leave customer_id empty to use the logged-in customer."""
-    return cancel_order(order_id, customer_id)
+    raise NotImplementedError("Run through execute_tool()")
 
 
 LLM_TOOLS = [
@@ -284,10 +241,11 @@ ALLOWED_ARGS = {
 }
 
 
-def execute_tool(name: str, args: dict, session_customer_id: str = "") -> dict:
+def execute_tool(name: str, args: dict, business_id: str, session_customer_id: str = "") -> dict:
     """Safely run a tool requested by the LLM.
 
     - Unknown tools and unexpected arguments are rejected.
+    - The business ID always comes from the app session, never from the LLM.
     - The customer ID from the app session overrides whatever the LLM sent.
     - Any unexpected exception becomes an error dict instead of a crash.
     """
@@ -295,7 +253,11 @@ def execute_tool(name: str, args: dict, session_customer_id: str = "") -> dict:
         return _error(f"Unknown tool '{name}'.")
     if not isinstance(args, dict):
         return _error("Tool arguments were not valid.")
+    if not business_id or db.get_business(business_id) is None:
+        return _error("This assistant is not linked to a valid business.")
 
+    # Anything not in ALLOWED_ARGS is dropped, including a "business_id" the LLM
+    # might try to send.
     clean_args = {k: v for k, v in args.items() if k in ALLOWED_ARGS[name]}
 
     if "customer_id" in ALLOWED_ARGS[name]:
@@ -306,7 +268,7 @@ def execute_tool(name: str, args: dict, session_customer_id: str = "") -> dict:
         clean_args.setdefault("customer_id", "")
 
     try:
-        return TOOL_FUNCTIONS[name](**clean_args)
+        return TOOL_FUNCTIONS[name](business_id=business_id, **clean_args)
     except TypeError as exc:
         logger.exception("Bad arguments for tool %s", name)
         return _error(f"Invalid arguments for {name}: {exc}")

@@ -13,7 +13,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-from src import config, prompts
+from src import config, db, prompts
 from src.rag import KnowledgeBaseError, retrieve
 from src.tools import LLM_TOOLS, execute_tool
 
@@ -26,6 +26,12 @@ logger = logging.getLogger(__name__)
 class SupportState(TypedDict):
     # Conversation so far (user + assistant text). add_messages appends new ones.
     messages: Annotated[list[AnyMessage], add_messages]
+    # Which business this conversation belongs to. Set by the app, never by the LLM.
+    # Retrieval and every tool only use this business's data.
+    business_id: str
+    # Business name and one-line description, used to fill in the prompts
+    business_name: str
+    business_description: str
     # Customer ID from the sidebar ("" if not given). Tools that need it use this.
     customer_id: str
     # Router decision: "rag" | "tool" | "direct" | "clarify"
@@ -67,12 +73,26 @@ class RouteDecision(BaseModel):
 # ---------------------------------------------------------------------------
 # LLM
 # ---------------------------------------------------------------------------
-def get_llm() -> ChatOpenAI:
+def api_key_for(business_id: str) -> str:
+    """The business's own OpenAI key if it has one, otherwise the key from .env."""
+    return db.get_business_api_key(business_id) or config.OPENAI_API_KEY
+
+
+def get_llm(state: SupportState) -> ChatOpenAI:
     return ChatOpenAI(
         model=config.OPENAI_MODEL,
-        api_key=config.OPENAI_API_KEY,
+        api_key=api_key_for(state["business_id"]),
         timeout=60,
         max_retries=2,
+    )
+
+
+def _prompt(template: str, state: SupportState, **extra) -> str:
+    """Fill a prompt template with the business's name and description."""
+    return template.format(
+        business_name=state["business_name"],
+        business_description=state.get("business_description") or "an online business",
+        **extra,
     )
 
 
@@ -100,8 +120,8 @@ def _finish(text: str) -> dict:
 # ---------------------------------------------------------------------------
 def router_node(state: SupportState) -> dict:
     """Decide which branch handles the message: rag, tool, direct or clarify."""
-    router = get_llm().with_structured_output(RouteDecision)
-    system = prompts.ROUTER_PROMPT.format(customer_id=_customer_label(state))
+    router = get_llm(state).with_structured_output(RouteDecision)
+    system = _prompt(prompts.ROUTER_PROMPT, state, customer_id=_customer_label(state))
     decision: RouteDecision = router.invoke([SystemMessage(content=system)] + _history(state))
     logger.info("Route: %s (%s)", decision.action, decision.label)
     return {
@@ -113,9 +133,9 @@ def router_node(state: SupportState) -> dict:
 
 
 def retrieve_node(state: SupportState) -> dict:
-    """RAG step 1: search FAISS for chunks related to the question."""
+    """RAG step 1: search this business's FAISS index for related chunks."""
     try:
-        chunks = retrieve(state["search_query"])
+        chunks = retrieve(state["business_id"], state["search_query"])
     except KnowledgeBaseError as exc:
         logger.error("Retrieval failed: %s", exc)
         chunks = []
@@ -127,22 +147,22 @@ def generate_node(state: SupportState) -> dict:
     chunks = state.get("retrieved_context", [])
     if not chunks:
         return _finish(
-            "Sorry, I can't access NovaCart's policy information right now. "
+            f"Sorry, I can't access {state['business_name']}'s policy information right now. "
             "Please try again in a moment, or I can create a support ticket for you."
         )
 
     context = "\n\n".join(f"[{c['source']}]\n{c['content']}" for c in chunks)
-    system = prompts.RAG_ANSWER_PROMPT.format(context=context)
-    answer = get_llm().invoke([SystemMessage(content=system)] + _history(state))
+    system = _prompt(prompts.RAG_ANSWER_PROMPT, state, context=context)
+    answer = get_llm(state).invoke([SystemMessage(content=system)] + _history(state))
     return _finish(answer.text)
 
 
 def tool_agent_node(state: SupportState) -> dict:
     """Tool branch: the LLM picks a tool (or, after results, writes the answer)."""
-    system = prompts.TOOL_AGENT_PROMPT.format(customer_id=_customer_label(state))
+    system = _prompt(prompts.TOOL_AGENT_PROMPT, state, customer_id=_customer_label(state))
     messages = [SystemMessage(content=system)] + _history(state) + state["tool_messages"]
 
-    llm = get_llm()
+    llm = get_llm(state)
     if state["tool_rounds"] < config.MAX_TOOL_ROUNDS:
         llm = llm.bind_tools(LLM_TOOLS)
     # After MAX_TOOL_ROUNDS the LLM gets no tools, so it must write an answer.
@@ -161,7 +181,9 @@ def run_tools_node(state: SupportState) -> dict:
     log = list(state.get("tool_calls", []))
 
     for call in last.tool_calls:
-        result = execute_tool(call["name"], call.get("args", {}), state.get("customer_id", ""))
+        result = execute_tool(
+            call["name"], call.get("args", {}), state["business_id"], state.get("customer_id", "")
+        )
         logger.info("Tool %s(%s) -> ok=%s", call["name"], call.get("args"), result.get("ok"))
         log.append({"tool": call["name"], "input": call.get("args", {}), "result": result})
         new_tool_messages.append(
@@ -177,15 +199,16 @@ def run_tools_node(state: SupportState) -> dict:
 
 def direct_node(state: SupportState) -> dict:
     """Plain conversational reply (greetings, thanks, small talk)."""
-    reply = get_llm().invoke([SystemMessage(content=prompts.DIRECT_PROMPT)] + _history(state))
+    system = _prompt(prompts.DIRECT_PROMPT, state)
+    reply = get_llm(state).invoke([SystemMessage(content=system)] + _history(state))
     return _finish(reply.text)
 
 
 def clarify_node(state: SupportState) -> dict:
     """Ask the customer for the missing information instead of guessing."""
     missing = state.get("missing_info") or "a few more details about your request"
-    system = prompts.CLARIFY_PROMPT.format(missing_info=missing)
-    reply = get_llm().invoke([SystemMessage(content=system)] + _history(state))
+    system = _prompt(prompts.CLARIFY_PROMPT, state, missing_info=missing)
+    reply = get_llm(state).invoke([SystemMessage(content=system)] + _history(state))
     return _finish(reply.text)
 
 

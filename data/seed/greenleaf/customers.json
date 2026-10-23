@@ -1,0 +1,20 @@
+[
+  {
+    "customer_id": "CUST001",
+    "name": "Meera Iyer",
+    "email": "meera.iyer@example.com",
+    "phone": "+91-98450-10001",
+    "city": "Chennai",
+    "membership": "GreenLeaf Fresh Pass",
+    "member_since": "2025-02-14"
+  },
+  {
+    "customer_id": "CUST002",
+    "name": "Kabir Singh",
+    "email": "kabir.singh@example.com",
+    "phone": "+91-98450-10002",
+    "city": "Delhi",
+    "membership": "Standard",
+    "member_since": "2025-11-02"
+  }
+]

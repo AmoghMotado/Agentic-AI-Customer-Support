@@ -8,7 +8,10 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# Generated vector store (rebuilt automatically)
+# Database created on first run (rebuilt from data/seed/ if deleted)
+data/app.db
+
+# Generated vector stores, one folder per business (rebuilt automatically)
 vector_store/*
 !vector_store/.gitkeep
 

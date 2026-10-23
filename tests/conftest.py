@@ -1,20 +1,14 @@
-"""Make every test use temporary copies of the JSON data, never the real files."""
-
-import shutil
+"""Every test gets a fresh temporary database and vector store, never the real ones."""
 
 import pytest
 
-from src import config
+from src import config, db, rag
 
 
 @pytest.fixture(autouse=True)
 def temp_data(tmp_path, monkeypatch):
-    for name in ("orders.json", "customers.json"):
-        shutil.copyfile(config.DATA_DIR / name, tmp_path / name)
-    shutil.copyfile(config.SEED_ORDERS_FILE, tmp_path / "orders.json")
-    (tmp_path / "tickets.json").write_text("[]", encoding="utf-8")
-
-    monkeypatch.setattr(config, "ORDERS_FILE", tmp_path / "orders.json")
-    monkeypatch.setattr(config, "CUSTOMERS_FILE", tmp_path / "customers.json")
-    monkeypatch.setattr(config, "TICKETS_FILE", tmp_path / "tickets.json")
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "app.db")
+    monkeypatch.setattr(config, "VECTOR_STORE_DIR", tmp_path / "vector_store")
+    monkeypatch.setattr(rag, "_vector_stores", {})
+    db.init_db()  # seeds NovaCart and GreenLeaf from data/seed/
     yield tmp_path

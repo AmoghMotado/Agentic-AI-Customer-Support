@@ -2,31 +2,33 @@
 
 ## 30-second explanation
 
-I built an AI customer support assistant for a fictional online store. For each message, a LangGraph agent decides whether to answer from the company's policy documents using RAG, call a tool like order-status lookup or ticket creation, reply conversationally, or ask for missing details such as an order ID. It uses OpenAI for the LLM, FAISS for vector search and Streamlit for the chat UI.
+I built an AI customer support assistant that one app can run for many businesses, each with its own documents, customers and orders kept strictly separate. For each message, a LangGraph agent decides whether to answer from the company's policy documents using RAG, call a tool like order-status lookup or ticket creation, reply conversationally, or ask for missing details such as an order ID. It uses OpenAI for the LLM, FAISS for vector search and Streamlit for the chat UI.
 
 ## 1-minute explanation
 
 The project is an agentic customer support assistant for a demo e-commerce store called NovaCart. The key problem is routing: some questions need policy knowledge, some need account data or an action, and some can't be handled yet because information is missing.
 
-I built a LangGraph workflow where a router node uses the LLM with structured output to classify each message into RAG, tool, direct or clarify. Policy questions go through a RAG pipeline: documents are split into chunks, embedded with a sentence-transformers model and stored in FAISS, and the LLM answers using only the retrieved chunks. Action requests go to a tool-calling node where the LLM picks a function like `get_order_status` or `create_support_ticket`, and my code validates the arguments before running it. The UI is a Streamlit chat with a debug mode that shows which route and tools were used. The order and customer systems are simulated with JSON files.
+I built a LangGraph workflow where a router node uses the LLM with structured output to classify each message into RAG, tool, direct or clarify. Policy questions go through a RAG pipeline: documents are split into chunks, embedded with a sentence-transformers model and stored in FAISS, and the LLM answers using only the retrieved chunks. Action requests go to a tool-calling node where the LLM picks a function like `get_order_status` or `create_support_ticket`, and my code validates the arguments before running it. The UI is a Streamlit chat with a debug mode that shows which route and tools were used.
+
+I then made it multi-business: every business has a business ID, and its settings, documents, customers, orders and tickets live in SQLite tables keyed by that ID, with a separate FAISS index per business. The business ID comes from the app, never from the LLM, so one business can never read another's data. An Admin page lets a new business upload its documents and data without code changes.
 
 ## 2-minute technical explanation
 
 There are four layers.
 
-1. **UI**: Streamlit keeps the chat history in session state and calls one function, `run_turn`, for each message, passing the history and the customer ID from the sidebar.
+1. **UI**: Streamlit keeps the chat history in session state and calls one function, `run_turn`, for each message, passing the history, the business ID (from the sidebar or the `?business=` link) and the customer ID.
 2. **Orchestration**: `run_turn` invokes a compiled LangGraph `StateGraph`. The state is a typed dictionary with the messages, customer ID, the router's decision, retrieved chunks, a tool log and the final response.
 3. **Agent nodes**: the router calls the LLM with `with_structured_output` and a Pydantic schema, so it returns a validated object like `{action: "tool", label: "order status"}` instead of free text. A conditional edge maps that action to a branch.
    - RAG branch: `retrieve` runs a FAISS similarity search on a standalone version of the question (the router rewrites follow-ups), and `generate` prompts the LLM to answer only from those chunks and to admit when the answer isn't there.
    - Tool branch: `tool_agent` calls the LLM with tools bound via `bind_tools`. If it returns tool calls, `run_tools` executes them and the graph loops back so the LLM can write the final answer from the results. A round limit prevents infinite loops.
    - Direct and clarify branches are single LLM calls with their own prompts.
-4. **Tools and data**: plain Python functions over JSON files. They validate ID formats, check that the order belongs to the customer, and return `ok: false` errors instead of raising exceptions.
+4. **Tools and data**: plain Python functions over a SQLite database (`src/db.py`). Every query filters on `business_id`. They validate ID formats, check that the order belongs to the customer, and return `ok: false` errors instead of raising exceptions.
 
 Errors from OpenAI (bad key, quota, network) are caught in `run_turn` and converted into readable messages.
 
 ## Architecture explanation
 
-Streamlit UI → `run_turn()` → LangGraph graph (router → one of four branches) → final response back to the UI. The RAG branch uses the FAISS index built from `data/knowledge_base`. The tool branch uses `src/tools.py` over `data/*.json`. All prompts live in `src/prompts.py` and all settings in `src/config.py`, loaded from `.env`.
+Streamlit UI → `run_turn(business_id, ...)` → LangGraph graph (router → one of four branches) → final response back to the UI. The RAG branch searches `vector_store/<business_id>/`, built from that business's documents in SQLite. The tool branch uses `src/tools.py` over the same database. Prompts in `src/prompts.py` are shared and filled in with the business's name. Settings are in `src/config.py`, loaded from `.env`. The Admin page (`pages/1_Admin.py`) manages businesses.
 
 ## RAG explanation
 
@@ -43,6 +45,22 @@ LangGraph models a workflow as a graph of nodes (Python functions) connected by 
 ## Tool calling explanation
 
 I describe each tool to the LLM with a name, a docstring and typed arguments (LangChain's `@tool` turns that into a JSON schema). When the LLM decides a tool is needed, it doesn't run anything: it returns a structured tool call such as `get_order_status(order_id="ORD1001")`. My code validates and executes it, returns the result as a `ToolMessage`, and the LLM turns that result into a natural answer.
+
+## Multi-business (multi-tenant) explanation
+
+A "tenant" is one customer of a software product, here one business. The two common designs are a separate deployment per business, or one shared app where every row of data is tagged with its business. I chose the shared app because adding a business becomes a form on the Admin page instead of a new deployment.
+
+Isolation works in four places:
+1. **Database**: every table has a `business_id` column and every query in `src/db.py` has `WHERE business_id = ?`. The same customer ID can exist in two businesses as different people, which my tests use to catch leaks.
+2. **Retrieval**: one FAISS index per business in `vector_store/<business_id>/`. A search physically cannot return another business's text. A single shared index with a metadata filter would also work, but one bug in the filter would leak data, and separate indexes are easy to rebuild or delete per business.
+3. **Tools**: `business_id` is not in any tool schema. `execute_tool` takes it from the session and drops it if the LLM sends one, just like the customer ID.
+4. **Conversation**: switching business starts a new chat, so history is never shared.
+
+Per-business settings fill in the shared prompts ("You are GreenLeaf Grocery's support assistant...") and can include the business's own OpenAI key, so each business can pay for its own usage.
+
+## Why SQLite?
+
+It is built into Python, needs no server, and stores everything in one file, which suits a portfolio project and a single server. The code only talks to the database through `src/db.py`, so moving to PostgreSQL later (with row-level security for extra isolation) would change one file.
 
 ## Why FAISS?
 
@@ -81,7 +99,7 @@ Several layers:
 
 ## How could this be improved in production?
 
-Real authentication and a database instead of JSON; human confirmation before irreversible actions (LangGraph interrupts); an evaluation set to measure routing accuracy and answer faithfulness; monitoring and tracing (for example LangSmith); persistent conversation memory; streaming responses; rate limiting; and hybrid search with reranking for a larger knowledge base.
+Real authentication with per-business admin accounts, PostgreSQL instead of SQLite; human confirmation before irreversible actions (LangGraph interrupts); an evaluation set to measure routing accuracy and answer faithfulness; monitoring and tracing (for example LangSmith); persistent conversation memory; streaming responses; rate limiting; and hybrid search with reranking for a larger knowledge base.
 
 ## Interview questions and answers
 
@@ -115,6 +133,14 @@ Real authentication and a database instead of JSON; human confirmation before ir
 
 15. **How did you test it?** Pytest tests for every tool (valid, invalid, missing and unauthorised inputs), document loading, chunking and retrieval accuracy, plus a manual checklist for routing, multi-turn flows and failure cases.
 
-16. **What would you change for many users?** Replace JSON files with a database, add real login, cache the embedding model in a separate service, and add tracing to monitor routing mistakes and cost.
+16. **What would you change for many users?** Move from SQLite to PostgreSQL, add real login for customers and per-business admin accounts, use a hosted vector database, run the embedding model as a separate service, and add tracing to monitor routing mistakes and cost per business.
 
 17. **What are the limitations?** Simulated data, one route per message, no authentication, history lost on refresh, and routing that depends on the LLM following the prompt.
+
+18. **How do you guarantee one business can't see another's data?** The business ID comes only from the app, never from the LLM. Every SQL query filters on it, every business has its own FAISS index, and tests check cross-business cases, for example that GreenLeaf can't look up or cancel a NovaCart order and that `CUST001` returns a different person in each business.
+
+19. **Why one FAISS index per business instead of one big index?** Isolation by construction: there is no filter to forget. It also lets me rebuild one business's index when its documents change without touching the others. The cost is more files on disk, which is fine at this scale.
+
+20. **How does a new business get onboarded?** On the Admin page: create the business (ID, name, one-line description, branding), upload policy documents, and optionally import customers and orders as JSON. The index builds automatically on the first question, and the business gets its own chat link, `/?business=<id>`.
+
+21. **Where would a real business's orders come from?** In production, the tools would call that business's own system (Shopify, WooCommerce or an internal API) using credentials stored in its settings. The tool interface stays the same; only the function bodies change.

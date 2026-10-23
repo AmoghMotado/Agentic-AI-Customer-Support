@@ -1,0 +1,8 @@
+{
+  "business_id": "novacart",
+  "name": "NovaCart",
+  "description": "an online shop for electronics, home and lifestyle products",
+  "logo": "🛒",
+  "accent_color": "#4f46e5",
+  "currency": "INR"
+}

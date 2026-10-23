@@ -13,7 +13,7 @@ langchain-huggingface>=1.0
 sentence-transformers>=3.0
 
 # App
-streamlit>=1.40
+streamlit>=1.50
 python-dotenv>=1.0
 
 # Tests

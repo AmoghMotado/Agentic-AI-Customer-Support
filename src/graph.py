@@ -16,8 +16,9 @@ import openai
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
-from src import config
+from src import config, db
 from src.agent import (
+    api_key_for,
     SupportState,
     after_tool_agent,
     clarify_node,
@@ -86,7 +87,8 @@ def _to_langchain_messages(history: list[dict]) -> list:
 def _friendly_error(exc: Exception) -> str:
     """Turn technical exceptions into messages a normal user can act on."""
     if isinstance(exc, openai.AuthenticationError):
-        return "The OpenAI API key is invalid. Please check OPENAI_API_KEY in your .env file."
+        return ("The OpenAI API key is invalid. Check OPENAI_API_KEY in your .env file, "
+                "or this business's own key on the Admin page.")
     if isinstance(exc, openai.RateLimitError):
         return ("The OpenAI API rate limit or quota was reached. Check your billing/credits "
                 "on platform.openai.com, then try again.")
@@ -102,8 +104,8 @@ def _friendly_error(exc: Exception) -> str:
     return "Sorry, something went wrong while handling your request. Please try again."
 
 
-def run_turn(user_message: str, history: list[dict], customer_id: str = "") -> dict:
-    """Run one user message through the graph.
+def run_turn(user_message: str, history: list[dict], business_id: str, customer_id: str = "") -> dict:
+    """Run one user message through the graph, for one business.
 
     Returns a dict that the UI can display directly:
         {"response", "action", "route_label", "search_query", "sources",
@@ -114,12 +116,20 @@ def run_turn(user_message: str, history: list[dict], customer_id: str = "") -> d
         return {"response": "Please type a message so I can help you.", "action": "none",
                 "error": "empty message"}
 
-    if not config.api_key_is_set():
+    business = db.get_business(business_id)
+    if business is None:
+        return {"response": "This support assistant is not linked to a valid business.",
+                "action": "none", "error": "unknown business"}
+
+    if not config.key_looks_real(api_key_for(business_id)):
         return {"response": "OPENAI_API_KEY is not set. Add it to your .env file and restart the app.",
                 "action": "none", "error": "missing API key"}
 
     initial_state = {
         "messages": _to_langchain_messages(history) + [HumanMessage(content=user_message)],
+        "business_id": business_id,
+        "business_name": business["name"],
+        "business_description": business["description"],
         "customer_id": (customer_id or "").strip().upper(),
         "action": "",
         "route_label": "",
@@ -149,6 +159,7 @@ def run_turn(user_message: str, history: list[dict], customer_id: str = "") -> d
             for c in final.get("retrieved_context", [])
         ],
         "tool_calls": final.get("tool_calls", []),
+        "business_id": business_id,
         "error": "",
     }
 

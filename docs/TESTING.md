@@ -6,7 +6,7 @@
 python -m pytest -v
 ```
 
-Expected: `24 passed, 5 deselected`. The 5 deselected tests are the slow retrieval tests. Run them with:
+Expected: `42 passed, 5 deselected`. The 5 deselected tests are the slow retrieval tests. Run them with:
 
 ```powershell
 python -m pytest -v -m slow
@@ -16,7 +16,7 @@ Expected: `5 passed` (the first run downloads the embedding model, about 90 MB).
 
 ## 2. Manual tests in the app
 
-Start the app with `streamlit run app.py`, turn on **Debug mode** in the sidebar, and keep Customer ID = `CUST001` unless a row says otherwise. Use **Clear conversation** between rows unless the row is a multi-turn test.
+Start the app with `python -m streamlit run app.py`, select **NovaCart** in the sidebar, turn on **Debug mode**, and keep Customer ID = `CUST001` unless a row says otherwise. Use **Clear conversation** between rows unless the row is a multi-turn test.
 
 ### RAG
 
@@ -61,8 +61,23 @@ Use **Demo data → Reset demo data** in the sidebar after T6 to restore ORD1003
 | I2 | "What's your return policy?" then "what about electronics?" | Second turn is RAG with a rewritten search query about electronics returns |
 | I3 | Put a wrong key in `.env`, restart, send a message | Red error: "The OpenAI API key is invalid..." (no stack trace) |
 | I4 | Remove the key from `.env`, restart | Red banner about the missing key, chat input disabled |
-| I5 | Rename `data/knowledge_base` temporarily and delete `vector_store/`, restart | Red "Knowledge base could not be loaded" banner. Rename it back afterwards. |
+| I5 | Create a business on the Admin page without uploading documents, open its chat | Red "Knowledge base could not be loaded... no knowledge-base documents yet" banner |
 | I6 | Disconnect from the internet, send a message | "I couldn't reach the OpenAI API..." |
 | I7 | Press Enter on an empty message | Nothing is sent |
 
 Tool failure handling is covered by the automated tests (`test_missing_required_argument_does_not_crash`, `test_execute_unknown_tool`).
+
+### Multi-business
+
+| # | Steps | Expected |
+|---|---|---|
+| M1 | Select GreenLeaf Grocery. Ask "What is your refund policy?" | RAG, source `refund_and_returns_policy.txt`, mentions 48 hours and the GreenLeaf Wallet. Nothing about NovaCart's 30 days. |
+| M2 | GreenLeaf, CUST001: "Where is order ORD1001?" | Tool result: no order found (ORD1001 belongs to NovaCart) |
+| M3 | GreenLeaf, CUST001: "Show my account details" | Meera Iyer, not Aarav Sharma |
+| M4 | Chat with NovaCart, then switch to GreenLeaf | The conversation starts fresh and the greeting names GreenLeaf |
+| M5 | Open http://localhost:8501/?business=greenleaf | GreenLeaf is already selected |
+| M6 | Admin: add business `city-bakery`, upload a .txt FAQ, chat with it | Answers come only from the uploaded file; the greeting says City Bakery |
+| M7 | Admin: GreenLeaf → Settings, set a wrong OpenAI key, chat with GreenLeaf, then NovaCart | GreenLeaf shows the invalid-key error; NovaCart still works with the .env key. Remove the key afterwards. |
+| M8 | Create a ticket in NovaCart, then open Admin → GreenLeaf → Tickets | The NovaCart ticket is not listed |
+
+The isolation rules are also covered by `tests/test_multi_business.py`.

@@ -1,0 +1,13 @@
+GreenLeaf Grocery Orders and Payments FAQ
+
+Can I cancel or change my order?
+An order can be cancelled for free while its status is "Processing", which means packing has not finished. After the order is out for delivery it cannot be cancelled.
+
+Which payment methods are accepted?
+GreenLeaf accepts UPI, credit and debit cards, the GreenLeaf Wallet, and cash on delivery for orders up to 2,000 INR.
+
+What is the GreenLeaf Fresh Pass?
+Fresh Pass is a membership that costs 99 INR per month. Members get free delivery on every order with no minimum amount, and early access to same-day slots.
+
+How do I contact GreenLeaf support?
+You can chat with the GreenLeaf assistant at any time. Human support agents are available from 7 AM to 10 PM every day, and support tickets are usually answered within 6 hours.

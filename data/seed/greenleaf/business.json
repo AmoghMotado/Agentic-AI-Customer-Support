@@ -1,0 +1,8 @@
+{
+  "business_id": "greenleaf",
+  "name": "GreenLeaf Grocery",
+  "description": "an online grocery store that delivers fresh produce and daily essentials",
+  "logo": "🥬",
+  "accent_color": "#15803d",
+  "currency": "INR"
+}

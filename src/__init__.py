@@ -1,1 +1,1 @@
-"""NovaCart Agentic AI Customer Support Assistant."""
+"""Agentic AI Customer Support Assistant: one app serving many businesses."""

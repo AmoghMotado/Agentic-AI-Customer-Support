@@ -1,0 +1,13 @@
+GreenLeaf Grocery Delivery Policy
+
+Delivery areas
+GreenLeaf Grocery currently delivers in Chennai, Bengaluru, Delhi and Hyderabad. We do not deliver outside these cities.
+
+Delivery slots
+Customers choose a 2-hour delivery slot at checkout. Slots run from 7 AM to 10 PM every day. Same-day slots are available for orders placed before 2 PM.
+
+Delivery charges
+Delivery is free on orders of 399 INR or more. Orders below 399 INR have a delivery charge of 30 INR.
+
+Missed deliveries
+If nobody is available to receive the order, the rider waits 10 minutes and calls the customer twice. Perishable items from a missed delivery cannot be redelivered, and the order is refunded minus the delivery charge.

@@ -1,0 +1,32 @@
+[
+  {
+    "order_id": "ORD5001",
+    "customer_id": "CUST001",
+    "product": "Weekly Vegetable Basket",
+    "amount": 649,
+    "order_date": "2026-10-21",
+    "status": "Out for Delivery",
+    "estimated_delivery": "2026-10-23",
+    "tracking_status": "Rider is on the way, slot 6 PM to 8 PM"
+  },
+  {
+    "order_id": "ORD5002",
+    "customer_id": "CUST001",
+    "product": "Organic Basmati Rice 5 kg",
+    "amount": 899,
+    "order_date": "2026-10-15",
+    "status": "Delivered",
+    "estimated_delivery": "2026-10-16",
+    "tracking_status": "Delivered on 2026-10-16"
+  },
+  {
+    "order_id": "ORD5003",
+    "customer_id": "CUST002",
+    "product": "Fruit Box (Seasonal)",
+    "amount": 499,
+    "order_date": "2026-10-22",
+    "status": "Processing",
+    "estimated_delivery": "2026-10-24",
+    "tracking_status": "Order confirmed, packing at the Delhi store"
+  }
+]

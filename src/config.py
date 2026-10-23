@@ -17,12 +17,19 @@ load_dotenv(BASE_DIR / ".env")
 
 # ---------- Paths ----------
 DATA_DIR = BASE_DIR / "data"
-KNOWLEDGE_BASE_DIR = DATA_DIR / "knowledge_base"
-ORDERS_FILE = DATA_DIR / "orders.json"
-CUSTOMERS_FILE = DATA_DIR / "customers.json"
-TICKETS_FILE = DATA_DIR / "tickets.json"
-SEED_ORDERS_FILE = DATA_DIR / "seed" / "orders.json"
+# SQLite database with every business, its documents, customers, orders and tickets.
+# Created automatically on first run (and seeded from data/seed/).
+DB_PATH = DATA_DIR / "app.db"
+# One folder per demo business: business.json, customers.json, orders.json, knowledge_base/
+SEED_DIR = DATA_DIR / "seed"
+# One FAISS index per business: vector_store/<business_id>/
 VECTOR_STORE_DIR = BASE_DIR / "vector_store"
+# Business shown first in the chat app
+DEFAULT_BUSINESS_ID = os.getenv("DEFAULT_BUSINESS_ID", "novacart").strip().lower()
+
+# ---------- Admin page ----------
+# If set, the Admin page asks for this password. Leave empty for local demos.
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
 
 # ---------- OpenAI ----------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
@@ -48,6 +55,12 @@ MAX_TOOL_ROUNDS = 3  # max tool-call rounds per user message (stops runaway loop
 MAX_HISTORY_MESSAGES = 10  # how many past chat messages are sent to the LLM
 
 
+def key_looks_real(key: str) -> bool:
+    """True if a key is filled in and is not the placeholder from .env.example."""
+    key = (key or "").strip()
+    return bool(key) and not key.startswith("sk-your")
+
+
 def api_key_is_set() -> bool:
-    """True if a real-looking OpenAI key is configured."""
-    return bool(OPENAI_API_KEY) and not OPENAI_API_KEY.startswith("sk-your")
+    """True if a real-looking OpenAI key is configured in .env."""
+    return key_looks_real(OPENAI_API_KEY)

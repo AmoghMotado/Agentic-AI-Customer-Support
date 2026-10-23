@@ -2,6 +2,23 @@
 
 Five steps, about 10 minutes (most of it downloading packages).
 
+## Upgrading from the single-business version
+
+If the NovaCart-only version already runs on your machine, you don't need to set anything up again. No new packages are needed (SQLite comes with Python).
+
+1. Unzip the new version into a **new** folder, for example `C:\Projects\agentic-ai-customer-support-v2`.
+2. Copy your `.env` from the old folder into the new one. Optionally add the two new lines from `.env.example` (`DEFAULT_BUSINESS_ID`, `ADMIN_PASSWORD`); both have sensible defaults.
+3. Reuse your existing virtual environment, or create a new one with steps 2 and 3 below. In Git Bash:
+
+```bash
+cd /c/Projects/agentic-ai-customer-support-v2
+source /c/Projects/agentic-ai-customer-support/.venv/Scripts/activate   # your old .venv
+python -m pytest -v                 # expect: 42 passed, 5 deselected
+python -m streamlit run app.py
+```
+
+The first start creates `data/app.db` and loads NovaCart and GreenLeaf Grocery into it. Each business's search index is built the first time you chat with it.
+
 ## 1. Unzip and open in VS Code
 
 Unzip to a short path **without spaces and outside OneDrive**, for example:
@@ -53,9 +70,9 @@ First, the free tests (no API calls):
 python -m pytest -v
 ```
 
-**Expected:** `23 passed, 5 deselected`.
+**Expected:** `42 passed, 5 deselected`.
 
-Then build the search index and check retrieval (first run downloads the ~90 MB embedding model):
+Then build each business's search index and check retrieval (first run downloads the ~90 MB embedding model):
 
 ```powershell
 python -m src.rag
@@ -64,20 +81,22 @@ python -m src.rag
 **Expected:** something like
 
 ```
-Vector store built: 8 documents, 29 chunks
-Embedding model: huggingface:sentence-transformers/all-MiniLM-L6-v2
-
+NovaCart (novacart): 8 documents, 29 chunks, huggingface:sentence-transformers/all-MiniLM-L6-v2
 Test query: What is your refund policy?
   refund_policy.txt #1 (distance 0.61): NovaCart Refund Policy Overview NovaCart offers refunds...
+
+GreenLeaf Grocery (greenleaf): 3 documents, ...
+Test query: What is your refund policy?
+  refund_and_returns_policy.txt #1 (distance ...): GreenLeaf Grocery Refund and Returns Policy...
 ```
 
 Then start the app:
 
 ```powershell
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
-Your browser opens http://localhost:8501. Turn on **Debug mode** in the sidebar and try the example query buttons. Press **Ctrl+C** in the terminal to stop.
+Your browser opens http://localhost:8501. Pick a business at the top of the sidebar (or open http://localhost:8501/?business=greenleaf), turn on **Debug mode** and try the example query buttons. Open **Admin** in the sidebar to add your own business. Press **Ctrl+C** in the terminal to stop.
 
 ## What you should see
 
@@ -86,8 +105,16 @@ Your browser opens http://localhost:8501. Turn on **Debug mode** in the sidebar 
 | What is your refund policy? | Debug shows Action: Knowledge base (RAG) and the source file |
 | Where is order ORD1001? | Debug shows Tool `get_order_status`, input `ORD1001`, result Shipped |
 | Where is my order? | The assistant asks for your order ID and calls no tool |
-| My package arrived damaged. Create a support ticket. | A ticket ID like TCK1001, saved in `data/tickets.json` |
+| My package arrived damaged. Create a support ticket. | A ticket ID like TCK1001, visible on the Admin page under Tickets |
 | Hello | A short friendly reply |
+| Switch to GreenLeaf, ask "What is your refund policy?" | GreenLeaf's 48-hour perishables policy, source `refund_and_returns_policy.txt` |
+
+## Adding your own business
+
+1. Open **Admin** in the sidebar and use **Add a business** (ID like `city-bakery`, name, one-line description).
+2. In **Knowledge base**, upload `.txt` or `.md` files (policies, FAQs) and click **Save uploaded documents**.
+3. Optionally, in **Customers & orders**, import a `customers.json` and then an `orders.json` (click **File format** for an example).
+4. Open http://localhost:8501/?business=city-bakery and chat.
 
 `docs/TESTING.md` has the full checklist, including the failure cases to try.
 
@@ -102,7 +129,8 @@ Your browser opens http://localhost:8501. Turn on **Debug mode** in the sidebar 
 | `rate limit or quota was reached` | Add credit at platform.openai.com > Billing |
 | `The model '...' is not available` | Put a model your account can use in `OPENAI_MODEL` in `.env` |
 | Install fails on `torch` | Use the OpenAI embeddings option below |
-| Answers look wrong after editing a policy file | Delete the `vector_store` folder and run `python -m src.rag` again |
+| Answers look wrong after changing documents | On the Admin page, click **Rebuild search index now** (or delete the `vector_store` folder) |
+| I want the original demo data back | Stop the app, delete `data/app.db` and `vector_store`, start again |
 
 ## Using OpenAI embeddings instead of the local model
 
@@ -110,7 +138,7 @@ This avoids the 2 GB PyTorch download and costs a fraction of a cent for this kn
 
 1. In `.env`, set `EMBEDDING_PROVIDER=openai`
 2. In `requirements.txt`, delete the `langchain-huggingface` and `sentence-transformers` lines
-3. Delete the `vector_store` folder, then run `python -m src.rag`
+3. Delete the `vector_store` folder, then run `python -m src.rag` (it rebuilds every business)
 
 The app rebuilds the index automatically when the embedding model changes.
 
